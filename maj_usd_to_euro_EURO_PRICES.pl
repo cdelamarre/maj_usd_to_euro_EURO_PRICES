@@ -20,12 +20,12 @@ my $dbh = DBI->connect( $base_fcs_dsn, $base_fcs_user, $base_fcs_password, {
 my $EFFECTIVE_DATE;
 my $OLD_RATE;
 my $NEW_RATE;
-my $DBUG = 1;
+my $DBUG = 0;
 ###########################################################
 my $log_msg;
-my $str_rate = $NEW_RATE.'/'.$OLD_RATE;
 &init();
-&backupTablesBeforeChanges();
+my $str_rate = $NEW_RATE.'/'.$OLD_RATE;
+#&backupTablesBeforeChanges();
 #&getSqlFromFile('.');
 
 
@@ -40,11 +40,8 @@ my $str_rate = $NEW_RATE.'/'.$OLD_RATE;
 #&insert_palletizations_costs();
 #&insert_final_truckings_costs();
 #&insert_global_costs();
+#&maj_ref_letters_credit_fees_cost();
 #&maj_nomenclatures();
-
-
-
-
 $dbh->disconnect;
 sub backupTablesBeforeChanges() {
     &backupTableBeforeChanges('nomenclature_rates');
@@ -64,9 +61,9 @@ sub backupTablesBeforeChanges() {
 }
 sub backupTableBeforeChanges {
     my ($tableToBackup) = @_;
-    $sqlr = "CREATE TABLE ".$tableToBackup."_".$EFFECTIVE_DATE." AS SELECT * FROM ".$tableToBackup.";";
+    my $sqlr = "CREATE TABLE ".$tableToBackup."_".$EFFECTIVE_DATE." AS SELECT * FROM ".$tableToBackup.";";
     print $sqlr."\n\n" if($DBUG);
-    #    $dbh->do($sqlr) if(!$DBUG);
+    $dbh->do($sqlr) if(!$DBUG);
     if ( $dbh->errstr ne undef ) {
         # ERREUR EXECUTION SQL
         print "\nError : ".$dbh->errstr."\n". $sqlr;
@@ -583,6 +580,52 @@ sub insert_truckings_cost {
         exit;
     }
     $rs_insert_truckings_cost_by_date->finish;
+    my $sqlr= "
+
+	
+INSERT INTO ref_truckings_lcl_by_bracket
+(id_trucking_cost, id_ref_trucking_by_date, low_bracket, up_bracket, cost)
+SELECT
+rtcbd.id_trucking_cost,
+last_rtcbd.id as id_ref_trucking_by_date,
+rtlbb.low_bracket,
+rtlbb.up_bracket,
+CAST(rtlbb.cost AS NUMERIC)*(".$str_rate.") as cost
+FROM ref_truckings_lcl_by_bracket as rtlbb
+LEFT JOIN ref_truckings_cost_by_date as rtcbd
+ON rtlbb.id_ref_trucking_by_date = rtcbd.id
+LEFT JOIN (
+    SELECT
+    rtcbd.id_trucking_cost,
+    rtcbd.id
+   
+    FROM ref_truckings_cost_by_date as rtcbd
+    WHERE rtcbd.effective_date = '".$EFFECTIVE_DATE."'
+
+) as last_rtcbd
+ON last_rtcbd.id_trucking_cost = rtcbd.id_trucking_cost
+WHERE
+( rtcbd.id_trucking_cost, rtcbd.effective_date) IN (
+SELECT
+rtcbd.id_trucking_cost,
+MAX(rtcbd.effective_date)
+FROM ref_truckings_lcl_by_bracket as rtlbb
+LEFT JOIN ref_truckings_cost_by_date as rtcbd
+ON rtlbb.id_ref_trucking_by_date = rtcbd.id
+WHERE rtcbd.effective_date <> '".$EFFECTIVE_DATE."'
+GROUP BY rtcbd.id_trucking_cost
+);	
+	
+	
+    ";
+    print $sqlr."\n\n" if($DBUG);
+    $dbh->do($sqlr) if(!$DBUG);
+    if ( $dbh->errstr ne undef ) {
+        # ERREUR EXECUTION SQL
+        print "\nError : ".$dbh->errstr."\n". $sqlr;
+        $dbh->disconnect;
+        exit;
+    }
 }
 sub insert_palletizations_costs {
     my $sqlr_insert_palletizations_costs = "
@@ -846,6 +889,29 @@ sub insert_global_costs {
     $rs_insert_global_costs->finish;
     print $sqlr_insert_global_costs if($DBUG);
 }
+sub maj_ref_letters_credit_fees_cost {
+    my $sqlr = "
+	UPDATE ref_letters_credit_fees_cost
+	SET cost = sub.cost
+	FROM (
+	SELECT 
+	id, 
+	(".$str_rate.")*cost as cost
+
+	FROM ref_letters_credit_fees_cost
+	) AS sub
+	WHERE ref_letters_credit_fees_cost.id=sub.id
+	;
+    ";
+    print $sqlr."\n\n" if($DBUG);
+    $dbh->do($sqlr) if(!$DBUG);
+    if ( $dbh->errstr ne undef ) {
+        # ERREUR EXECUTION SQL
+        print "\nError : ".$dbh->errstr."\n". $sqlr;
+        $dbh->disconnect;
+        exit;
+    }
+}
 sub maj_nomenclatures {
     #----------------
 #-- MAJ MIN MAX CUSTOMS
@@ -873,6 +939,7 @@ my $sqlr = "
         $rs->finish;
         exit;
     }
+    print $sqlr if($DBUG);
     while (  my $data = $rs->fetchrow_hashref ) {
         my $current_min_custom_duties =  $data-> {
             'min_custom_duties'
@@ -887,16 +954,12 @@ my $sqlr = "
 	WHERE min_custom_duties = '$current_min_custom_duties' AND max_custom_duties ='$current_max_custom_duties' 
 	; 
         ";
-        print $sqlr;
-        my $rs = $dbh->prepare($sqlr2);
-        #	$rs->execute();
-
+        print $sqlr2 if($DBUG);
+        $dbh->do($sqlr2);
         if ( $dbh->errstr ne undef ) {
             print $dbh->errstr.":<br><pre>".$sqlr2;
-            $rs->finish;
             exit;
         }
-        $rs->finish;
     }
     $rs->finish;
 }
