@@ -64,27 +64,6 @@ sub backupTablesBeforeChanges() {
 }
 sub backupTableBeforeChanges {
     my ($tableToBackup) = @_;
-    my $sqlr = "
-    CREATE TABLE ".$tableToBackup."_".$EFFECTIVE_DATE." (
-      login CHAR(30) NOT NULL,
-      password CHAR(30),
-      nom CHAR(30),
-      prenom CHAR(30),
-      email CHAR(100),
-      description CHAR(60),
-      etat INTEGER DEFAULT 0,
-      date DATE,
-      langue VARCHAR(2),
-      CONSTRAINT utilisateurs_new_pkey PRIMARY KEY(login)
-    ) 
-    WITH (oids = false);
-
-    INSERT INTO ".$tableToBackup."_".$EFFECTIVE_DATE."
-    SELECT * FROM ONLY ".$tableToBackup."
-    ;
-    ";
-    #    $sqlr = &getSqlFromFile(
-#    "tmp.sql", $tableToBackup, $EFFECTIVE_DATE, $OLD_RATE, $NEW_RATE);
     $sqlr = "CREATE TABLE ".$tableToBackup."_".$EFFECTIVE_DATE." AS SELECT * FROM ".$tableToBackup.";";
     print $sqlr."\n\n" if($DBUG);
     #    $dbh->do($sqlr) if(!$DBUG);
