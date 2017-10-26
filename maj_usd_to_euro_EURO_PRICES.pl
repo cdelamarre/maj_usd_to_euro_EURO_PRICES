@@ -5,8 +5,6 @@
 use strict;
 use DBI;
 use Class::Date qw(:errors date now);
-use File::Copy;
-use HTML::Template;
 use lib "/home/fcs/cot_fret/yrocher/web/params/";
 # permet d'ajouter des repertoires à @INC
 use lib "/home/fcs/cot_fret/yrocher/web/lib/";
@@ -87,7 +85,7 @@ sub backupTableBeforeChanges {
     ";
     #    $sqlr = &getSqlFromFile(
 #    "tmp.sql", $tableToBackup, $EFFECTIVE_DATE, $OLD_RATE, $NEW_RATE);
-    $sqlr = "CREATE TABLE ".$tableToBackup."_".$EFFECTIVE_DATE." AS SELECT * FROM ".$tableToBackup."";
+    $sqlr = "CREATE TABLE ".$tableToBackup."_".$EFFECTIVE_DATE." AS SELECT * FROM ".$tableToBackup.";";
     print $sqlr."\n\n" if($DBUG);
     #    $dbh->do($sqlr) if(!$DBUG);
     if ( $dbh->errstr ne undef ) {
@@ -983,7 +981,7 @@ sub exit_function() {
     close LOGFILE;
     exit;
 }
-==header
+=head
 
 sub getSqlFromFile {
     my ($filePath, $table) = @_;
@@ -997,4 +995,4 @@ sub getSqlFromFile {
     close(HANDLE);
     return $sqlr;
 }
-==cut
+=cut
