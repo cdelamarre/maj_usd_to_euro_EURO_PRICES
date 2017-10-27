@@ -41,7 +41,7 @@ my $str_rate = $NEW_RATE.'/'.$OLD_RATE;
 #&insert_final_truckings_costs();
 #&insert_global_costs();
 #&maj_ref_letters_credit_fees_cost();
-#&maj_nomenclatures();
+#&maj_nomenclatures_min_max();
 $dbh->disconnect;
 sub backupTablesBeforeChanges() {
     &backupTableBeforeChanges('nomenclature_rates');
@@ -912,56 +912,29 @@ sub maj_ref_letters_credit_fees_cost {
         exit;
     }
 }
-sub maj_nomenclatures {
-    #----------------
-#-- MAJ MIN MAX CUSTOMS
-#----------------
-
-my $sqlr = "
+sub maj_nomenclatures_min_max {
+    my $sqlr="
+    UPDATE nomenclature_rates 
+    SET min_custom_duties = sub.min_custom_duties, 
+    max_custom_duties = sub.max_custom_duties
+    FROM (
     SELECT 
-    concat(nh.fic_num_root||';'), 
-    nr.min_custom_duties, 
-    nr.max_custom_duties
-    FROM nomenclature_rates as nr
-    LEFT JOIN nomenclature_header as nh
-    ON nr.id_nomenclature = nh.id
-    WHERE 1=1
-    --AND  nh.id IS NULL
-    GROUP BY 
-    nr.min_custom_duties, 
-    nr.max_custom_duties
+    id,
+    ROUND(CAST(min_custom_duties AS NUMERIC)*(".$str_rate."), 5) AS min_custom_duties, 
+        ROUND(CAST(max_custom_duties AS NUMERIC)*(".$str_rate."), 5) AS max_custom_duties
+        WHERE CAST(nr.min_custom_duties AS NUMERIC) > 0
+    ) as sub
+    WHERE nomenclature_rates.id = sub.id
     ;
     ";
-    my $rs = $dbh->prepare($sqlr);
-    $rs->execute();
+    print $sqlr."\n\n" if($DBUG);
+    $dbh->do($sqlr) if(!$DBUG);
     if ( $dbh->errstr ne undef ) {
-        print $dbh->errstr.":<br><pre>".$sqlr;
-        $rs->finish;
+        # ERREUR EXECUTION SQL
+        print "\nError : ".$dbh->errstr."\n". $sqlr;
+        $dbh->disconnect;
         exit;
     }
-    print $sqlr if($DBUG);
-    while (  my $data = $rs->fetchrow_hashref ) {
-        my $current_min_custom_duties =  $data-> {
-            'min_custom_duties'
-        };
-        my $current_max_custom_duties =  $data-> {
-            'max_custom_duties'
-        };
-        my $sqlr2 = "
-	UPDATE nomenclature_rates SET 
-	min_custom_duties = ROUND(CAST('$current_min_custom_duties' AS NUMERIC)*($str_rate), 5), 
-	max_custom_duties = ROUND(CAST('$current_max_custom_duties' AS NUMERIC)*($str_rate), 5)
-	WHERE min_custom_duties = '$current_min_custom_duties' AND max_custom_duties ='$current_max_custom_duties' 
-	; 
-        ";
-        print $sqlr2 if($DBUG);
-        $dbh->do($sqlr2);
-        if ( $dbh->errstr ne undef ) {
-            print $dbh->errstr.":<br><pre>".$sqlr2;
-            exit;
-        }
-    }
-    $rs->finish;
 }
 sub init(@ARGV) {
     $log_msg .= "Debut du programme :".`date`."\n";
